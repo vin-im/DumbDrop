@@ -175,18 +175,23 @@ function sanitizeFilename(filePath) {
   
   // Sanitize each part separately to maintain path structure
   const sanitizedParts = parts.map(part => {
+    // Skip empty parts
+    if (!part.trim()) return '';
     // Sanitize individual path components but keep the '/' separators in the final result
     return part.replace(/[<>:"/\\|?*]+/g, '').replace(/["`$|;&<>]/g, '').trim();
   });
   
-  // Filter out empty parts and rejoin
+  // Filter out empty parts and rejoin with forward slashes
   const sanitizedPath = sanitizedParts.filter(Boolean).join('/');
   
   // Log the path transformation for debugging
   if (sanitizedPath !== filePath) {
     logger.debug(`Sanitized path:
       Original: ${filePath}
-      Sanitized: ${sanitizedPath}
+      Normalized: ${normalizedPath}
+      Parts: ${JSON.stringify(parts)}
+      Sanitized parts: ${JSON.stringify(sanitizedParts.filter(Boolean))}
+      Final: ${sanitizedPath}
     `);
   }
   

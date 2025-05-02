@@ -180,7 +180,7 @@ router.post('/init', async (req, res) => {
       const pathParts = safeFilename.split('/').filter(Boolean); // Remove empty parts
       
       if (pathParts.length > 1) {
-        // Handle files within folders
+        // Handle files within folders - properly handle multi-level directories
         const originalFolderName = pathParts[0];
         const folderPath = path.join(config.uploadDir, originalFolderName);
         let newFolderName = folderMappings.get(`${originalFolderName}-${batchId}`);
@@ -211,15 +211,25 @@ router.post('/init', async (req, res) => {
         // Construct the final path maintaining the full structure
         filePath = path.join(config.uploadDir, ...pathParts);
         
+        // Create all subdirectories in the path
+        const dirPath = path.dirname(filePath);
+        
         // Log the path construction for debugging
         logger.debug(`Constructed file path: 
           Original: ${safeFilename}
           Path parts: ${JSON.stringify(pathParts)}
           Final path: ${filePath}
+          Directory path: ${dirPath}
         `);
         
         // Ensure all parent directories exist (create the full directory structure)
-        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        try {
+          await fs.promises.mkdir(dirPath, { recursive: true });
+          logger.debug(`Created directory structure: ${dirPath}`);
+        } catch (err) {
+          logger.error(`Failed to create directory structure: ${err.message}`);
+          throw err;
+        }
       }
 
       // Get unique file path and handle
