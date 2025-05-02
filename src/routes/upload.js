@@ -109,68 +109,43 @@ function isValidBatchId(batchId) {
 // Initialize upload
 router.post('/init', async (req, res) => {
   const { filename, fileSize } = req.body;
-  const clientBatchId = req.headers['x-batch-id'];
+
+  // Log all request data for debugging
+  logger.debug(`Upload init request:
+    Filename: ${filename}
+    Size: ${fileSize}
+    Headers: ${JSON.stringify(req.headers)}
+  `);
+
+  if (!filename || fileSize === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Validate file size
+  const size = parseInt(fileSize, 10);
+  if (isNaN(size) || size < 0) {
+    return res.status(400).json({ error: 'Invalid file size' });
+  }
+
+  if (size > config.maxFileSize) {
+    return res.status(400).json({
+      error: 'File size exceeds the maximum allowed limit',
+      maxSize: config.maxFileSize,
+      requestedSize: size
+    });
+  }
+
+  // In demo mode, return a mock response
+  if (isDemoMode()) {
+    const mockResponse = createMockUploadResponse(filename, size);
+    return res.json(mockResponse);
+  }
 
   try {
-    // Log request details for debugging
-    if (process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development') {
-      logger.info(`Upload init request:
-        Filename: ${filename}
-        Size: ${fileSize} (${typeof fileSize})
-        Batch ID: ${clientBatchId || 'none'}
-      `);
-    } else {
-      logger.info(`Upload init request: ${filename} (${fileSize} bytes)`);
-    }
-
-    // Validate required fields with detailed errors
-    if (!filename) {
-      return res.status(400).json({ 
-        error: 'Missing filename',
-        details: 'The filename field is required'
-      });
-    }
+    // Process batch ID
+    const clientBatchId = req.headers['x-batch-id'];
+    const batchId = isValidBatchId(clientBatchId) ? clientBatchId : crypto.randomBytes(16).toString('hex');
     
-    if (fileSize === undefined || fileSize === null) {
-      return res.status(400).json({ 
-        error: 'Missing fileSize',
-        details: 'The fileSize field is required'
-      });
-    }
-
-    // Convert fileSize to number if it's a string
-    const size = Number(fileSize);
-    if (isNaN(size) || size < 0) { // Changed from size <= 0 to allow zero-byte files
-      return res.status(400).json({ 
-        error: 'Invalid file size',
-        details: `File size must be a non-negative number, received: ${fileSize} (${typeof fileSize})`
-      });
-    }
-
-    // Validate file size
-    const maxSizeInBytes = config.maxFileSize;
-    if (size > maxSizeInBytes) {
-      const message = `File size ${size} bytes exceeds limit of ${maxSizeInBytes} bytes`;
-      logger.warn(message);
-      return res.status(413).json({ 
-        error: 'File too large',
-        message,
-        limit: maxSizeInBytes,
-        limitInMB: Math.floor(maxSizeInBytes / (1024 * 1024))
-      });
-    }
-
-    // Generate batch ID from header or create new one
-    const batchId = req.headers['x-batch-id'] || `${Date.now()}-${crypto.randomBytes(4).toString('hex').substring(0, 9)}`;
-
-    // Validate batch ID if provided in header
-    if (req.headers['x-batch-id'] && !isValidBatchId(batchId)) {
-      return res.status(400).json({ 
-        error: 'Invalid batch ID format',
-        details: `Batch ID must match format: timestamp-[9 alphanumeric chars], received: ${batchId}`
-      });
-    }
-
     // Update batch activity
     batchActivity.set(batchId, Date.now());
 
@@ -230,10 +205,20 @@ router.post('/init', async (req, res) => {
           folderMappings.set(`${originalFolderName}-${batchId}`, newFolderName);
         }
 
+        // Replace the first part (root folder name) with the uniquely generated one
         pathParts[0] = newFolderName;
+        
+        // Construct the final path maintaining the full structure
         filePath = path.join(config.uploadDir, ...pathParts);
         
-        // Ensure all parent directories exist
+        // Log the path construction for debugging
+        logger.debug(`Constructed file path: 
+          Original: ${safeFilename}
+          Path parts: ${JSON.stringify(pathParts)}
+          Final path: ${filePath}
+        `);
+        
+        // Ensure all parent directories exist (create the full directory structure)
         await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       }
 

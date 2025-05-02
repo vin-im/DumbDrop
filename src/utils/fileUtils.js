@@ -160,9 +160,37 @@ async function getUniqueFolderPath(folderPath) {
   return finalPath;
 }
 
-function sanitizeFilename(fileName) {
-  const sanitized = fileName.replace(/[<>:"/\\|?*]+/g, '').replace(/["`$|;&<>]/g, '');
-  return sanitized;
+/**
+ * Sanitize a file or folder path for safe use in the filesystem
+ * Preserves directory structure by sanitizing each part of the path
+ * @param {string} filePath - The file path to sanitize
+ * @returns {string} Sanitized file path
+ */
+function sanitizeFilename(filePath) {
+  // First, normalize to forward slashes
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  
+  // Split the path into its components
+  const parts = normalizedPath.split('/');
+  
+  // Sanitize each part separately to maintain path structure
+  const sanitizedParts = parts.map(part => {
+    // Sanitize individual path components but keep the '/' separators in the final result
+    return part.replace(/[<>:"/\\|?*]+/g, '').replace(/["`$|;&<>]/g, '').trim();
+  });
+  
+  // Filter out empty parts and rejoin
+  const sanitizedPath = sanitizedParts.filter(Boolean).join('/');
+  
+  // Log the path transformation for debugging
+  if (sanitizedPath !== filePath) {
+    logger.debug(`Sanitized path:
+      Original: ${filePath}
+      Sanitized: ${sanitizedPath}
+    `);
+  }
+  
+  return sanitizedPath;
 }
 
 module.exports = {
